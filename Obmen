@@ -1,1 +1,4 @@
-https://productionresultssa31.blob.core.windows.net/actions-results/f4debb96-3ea0-8d81-8f2d-5f829f9f3ca9/workflow-job-run-7e227ffe-4326-5ca5-988e-9d5e5e22e5e8/artifacts/f530bd37a328cb15634951671b5aaa26131dc0fbe132e6f1e81da7dd14a944e4.zip?rscd=attachment%3B+filename%3D%22panel-build.zip%22&rsct=application%2Fzip&se=2026-11-09T16%3A46%3A16Z&sig=cO8sTeOqQ%2F0vKCWc70uyIrqQd7E1aMWkuL%2B03WvF0IQ%3D&ske=2026-11-09T19%3A45%3A09Z&skoid=ca7593d4-ee42-46cd-af88-8b886a2f84eb&sks=b&skt=2026-11-09T15%3A45%3A09Z&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skv=2025-11-05&sp=r&spr=https&sr=b&st=2026-11-09T16%3A36%3A11Z&sv=2025-11-05
+set RAT_SAFE=0
+set RAT_HOST=127.0.0.1
+set RAT_PORT=5555
+python rdp_agent.py
