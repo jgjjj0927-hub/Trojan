@@ -1,4 +1,13 @@
-set RAT_SAFE=0
-set RAT_HOST=127.0.0.1
-set RAT_PORT=5555
-python rdp_agent.py
+C:\Users\User>python rdp_agent.py
+Traceback (most recent call last):
+  File "C:\Users\User\rdp_agent.py", line 13, in <module>
+    rdp_agent_lib.run(HOST, PORT)
+  File "C:\Users\User\rdp_agent_lib.py", line 92, in run
+    _input_loop(s, lock)
+  File "C:\Users\User\rdp_agent_lib.py", line 37, in _input_loop
+    msg = _recv(sock)
+          ^^^^^^^^^^^
+  File "C:\Users\User\rdp_agent_lib.py", line 13, in _recv
+    hdr = sock.recv(4)
+          ^^^^^^^^^^^^
+TimeoutError: timed out
